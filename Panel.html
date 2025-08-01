@@ -37,10 +37,6 @@
     <header class="bg-indigo-700 text-white shadow-lg p-4">
         <div class="container mx-auto flex flex-col sm:flex-row justify-between items-center">
             <h1 class="text-2xl sm:text-3xl font-bold">Panel de Gestión de Productos</h1>
-            <!-- Se muestra el ID de usuario para identificar la sesión actual. -->
-            <div class="mt-2 sm:mt-0 text-sm opacity-80">
-                <p>ID de usuario: <span id="user-id">Cargando...</span></p>
-            </div>
         </div>
     </header>
 
@@ -126,32 +122,43 @@
         </div>
     </footer>
 
-    <!-- Scripts de Firebase -->
     <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, addDoc, doc, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-
-        // Variables globales proporcionadas por el entorno del Canvas
-        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
-
-        // Inicializar Firebase
-        const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
-        const auth = getAuth(app);
-
-        // Variables para los elementos del DOM y el ID de usuario
-        let userId = null;
+        // Variables para los elementos del DOM
         let productNameInput;
         let productDescriptionInput;
         let productPriceInput;
         let productImageFileInput;
         let imagePreview;
         let productsTableBody;
-        let userIdSpan;
-        let unsubscribeFromFirestore = null; // Para detener la escucha de cambios
+        
+        const LOCAL_STORAGE_KEY = 'teknovae_products';
+
+        /**
+         * Carga los productos del almacenamiento local.
+         * @returns {Array<Object>} - El array de productos.
+         */
+        function getProductsFromLocalStorage() {
+            try {
+                const products = JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEY)) || [];
+                return products;
+            } catch (e) {
+                console.error("Error al leer los productos del almacenamiento local:", e);
+                return [];
+            }
+        }
+
+        /**
+         * Guarda los productos en el almacenamiento local.
+         * @param {Array<Object>} products - El array de productos a guardar.
+         */
+        function saveProductsToLocalStorage(products) {
+            try {
+                localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(products));
+            } catch (e) {
+                console.error("Error al guardar los productos en el almacenamiento local:", e);
+                displayMessage("Error al guardar los productos localmente.", "error");
+            }
+        }
 
         /**
          * Convierte un archivo de imagen a una URL Base64.
@@ -168,16 +175,11 @@
         }
 
         /**
-         * Añade un nuevo producto a la base de datos Firestore.
+         * Añade un nuevo producto a la lista y lo guarda.
          * @param {Event} event - El evento de envío del formulario.
          */
         async function addProduct(event) {
             event.preventDefault(); // Prevenir el envío por defecto del formulario
-
-            if (!userId) {
-                displayMessage("Aún no se ha autenticado el usuario. Inténtalo de nuevo en unos segundos.", "error");
-                return;
-            }
 
             // Obtener los valores del formulario
             const name = productNameInput.value.trim();
@@ -203,36 +205,36 @@
             } else {
                 imageUrl = 'https://placehold.co/400x300/cccccc/333333?text=Sin+Imagen';
             }
+            
+            // Generar un ID único para el producto
+            const productId = Date.now().toString();
 
             const newProduct = {
+                id: productId,
                 name,
                 description,
                 price: price.toFixed(2), // Guardar el precio con 2 decimales
                 imageUrl,
-                timestamp: Date.now() // Añadir un timestamp para ordenar
             };
 
-            try {
-                // Añadir el nuevo documento a la colección de productos del usuario
-                const productsCollectionRef = collection(db, `artifacts/${appId}/users/${userId}/products`);
-                await addDoc(productsCollectionRef, newProduct);
-                displayMessage("Producto añadido con éxito a la base de datos.", "success");
+            const products = getProductsFromLocalStorage();
+            products.push(newProduct);
+            saveProductsToLocalStorage(products);
+            renderProducts(products); // Renderizar la lista actualizada
 
-                // Limpiar los campos del formulario
-                productNameInput.value = '';
-                productDescriptionInput.value = '';
-                productPriceInput.value = '';
-                productImageFileInput.value = '';
-                imagePreview.src = '';
-                imagePreview.classList.add('hidden');
-            } catch (e) {
-                console.error("Error al añadir el documento: ", e);
-                displayMessage("Error al guardar el producto en la base de datos.", "error");
-            }
+            displayMessage("Producto añadido con éxito.", "success");
+
+            // Limpiar los campos del formulario
+            productNameInput.value = '';
+            productDescriptionInput.value = '';
+            productPriceInput.value = '';
+            productImageFileInput.value = '';
+            imagePreview.src = '';
+            imagePreview.classList.add('hidden');
         }
 
         /**
-         * Elimina un producto de la base de datos Firestore.
+         * Elimina un producto de la lista y lo guarda.
          * @param {string} productId - El ID del producto a eliminar.
          */
         async function deleteProduct(productId) {
@@ -240,19 +242,12 @@
                 return; // El usuario canceló
             }
 
-            if (!userId) {
-                displayMessage("No se pudo eliminar el producto. Usuario no autenticado.", "error");
-                return;
-            }
+            let products = getProductsFromLocalStorage();
+            products = products.filter(product => product.id !== productId);
+            saveProductsToLocalStorage(products);
+            renderProducts(products); // Renderizar la lista actualizada
 
-            try {
-                const productDocRef = doc(db, `artifacts/${appId}/users/${userId}/products`, productId);
-                await deleteDoc(productDocRef);
-                displayMessage("Producto eliminado con éxito de la base de datos.", "success");
-            } catch (e) {
-                console.error("Error al eliminar el documento: ", e);
-                displayMessage("Error al eliminar el producto de la base de datos.", "error");
-            }
+            displayMessage("Producto eliminado con éxito.", "success");
         }
 
         /**
@@ -368,54 +363,10 @@
             productImageFileInput = document.getElementById('product-image-file');
             imagePreview = document.getElementById('image-preview');
             productsTableBody = document.getElementById('products-table-body');
-            userIdSpan = document.getElementById('user-id');
 
-            // Autenticar al usuario
-            try {
-                if (initialAuthToken) {
-                    await signInWithCustomToken(auth, initialAuthToken);
-                } else {
-                    await signInAnonymously(auth);
-                }
-            } catch (e) {
-                console.error("Error al autenticar:", e);
-                displayMessage("Error al autenticar. Es posible que los datos no se guarden.", "error");
-            }
-            
-            // Listener para el estado de autenticación
-            onAuthStateChanged(auth, (user) => {
-                if (user) {
-                    userId = user.uid;
-                    userIdSpan.textContent = userId;
-                    console.log("Usuario autenticado. ID:", userId);
-
-                    // Detener cualquier listener anterior si existe
-                    if (unsubscribeFromFirestore) {
-                        unsubscribeFromFirestore();
-                    }
-
-                    // Iniciar la escucha en tiempo real de Firestore
-                    const productsCollectionRef = collection(db, `artifacts/${appId}/users/${userId}/products`);
-                    unsubscribeFromFirestore = onSnapshot(productsCollectionRef, (querySnapshot) => {
-                        const products = [];
-                        querySnapshot.forEach((doc) => {
-                            products.push({ id: doc.id, ...doc.data() });
-                        });
-                        // Ordenar los productos por el timestamp para mostrar los más nuevos al final
-                        products.sort((a, b) => a.timestamp - b.timestamp);
-                        renderProducts(products);
-                    }, (error) => {
-                        console.error("Error al obtener los datos de Firestore:", error);
-                        productsTableBody.innerHTML = `<tr><td colspan="5" class="py-4 text-center text-red-500">Error al cargar productos.</td></tr>`;
-                    });
-
-                } else {
-                    userId = null;
-                    userIdSpan.textContent = 'No autenticado';
-                    productsTableBody.innerHTML = `<tr><td colspan="5" class="py-4 text-center text-gray-500">Inicia sesión para ver productos.</td></tr>`;
-                    console.log("Usuario no autenticado.");
-                }
-            });
+            // Cargar los productos existentes del almacenamiento local y renderizarlos
+            const products = getProductsFromLocalStorage();
+            renderProducts(products);
 
             // Añadir el event listener para el envío del formulario
             document.getElementById('add-product-form').addEventListener('submit', addProduct);
