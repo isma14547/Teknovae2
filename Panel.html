@@ -138,8 +138,10 @@
          * @returns {Array<Object>} - El array de productos.
          */
         function getProductsFromLocalStorage() {
+            console.log("Intentando leer productos del almacenamiento local...");
             try {
                 const products = JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEY)) || [];
+                console.log("Productos cargados exitosamente:", products);
                 return products;
             } catch (e) {
                 console.error("Error al leer los productos del almacenamiento local:", e);
@@ -152,8 +154,10 @@
          * @param {Array<Object>} products - El array de productos a guardar.
          */
         function saveProductsToLocalStorage(products) {
+            console.log("Intentando guardar productos en el almacenamiento local:", products);
             try {
                 localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(products));
+                console.log("Productos guardados exitosamente.");
             } catch (e) {
                 console.error("Error al guardar los productos en el almacenamiento local:", e);
                 displayMessage("Error al guardar los productos localmente.", "error");
@@ -217,6 +221,8 @@
                 imageUrl,
             };
 
+            console.log("Nuevo producto a añadir:", newProduct);
+
             const products = getProductsFromLocalStorage();
             products.push(newProduct);
             saveProductsToLocalStorage(products);
@@ -242,6 +248,7 @@
                 return; // El usuario canceló
             }
 
+            console.log("Intentando eliminar producto con ID:", productId);
             let products = getProductsFromLocalStorage();
             products = products.filter(product => product.id !== productId);
             saveProductsToLocalStorage(products);
@@ -256,6 +263,7 @@
          */
         function renderProducts(products) {
             productsTableBody.innerHTML = ''; // Limpiar las filas de la tabla existentes
+            console.log("Renderizando productos en la tabla:", products);
 
             if (products.length === 0) {
                 productsTableBody.innerHTML = `<tr><td colspan="5" class="py-4 text-center text-gray-500">No hay productos en la lista.</td></tr>`;
@@ -356,6 +364,7 @@
          * Inicializa la aplicación y los listeners.
          */
         async function initializeMainApp() {
+             console.log("Aplicación inicializada. Cargando elementos del DOM...");
              // Obtener elementos del DOM
             productNameInput = document.getElementById('product-name');
             productDescriptionInput = document.getElementById('product-description');
@@ -389,6 +398,7 @@
             
             // Inicializar iconos de Lucide para elementos estáticos
             lucide.createIcons();
+            console.log("Aplicación lista y renderizada.");
         }
         
         // Llamar a la función de inicialización cuando el DOM esté cargado
